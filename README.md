@@ -10,6 +10,7 @@ On first run, when OpenBao is not yet initialized, the installer runs `bao opera
 
 - `install-openbao-windows.ps1` — loopback HTTP only (`127.0.0.1:8200`, TLS disabled). PebbleDB storage and a local 32-byte static unseal key.
 - `uninstall-openbao-windows.ps1` — stops and deletes the `OpenBao` service when it is this NSSM install and deletes the install root (Pebble data, config, unseal key, and init file).
+- `login-openbao-ui.ps1` / `login-openbao-ui.cmd` — copy a token to the clipboard and open the UI token sign-in page (UAC once to read `init\`).
 
 ## Requirements
 
@@ -27,7 +28,53 @@ Default install root is `C:\OpenBao`. Default OpenBao version is `2.7.2`.
 .\uninstall-openbao-windows.ps1
 ```
 
-Sign in to the UI at [http://127.0.0.1:8200/ui/](http://127.0.0.1:8200/ui/) with the `root_token` from `C:\OpenBao\init\bao-init.json`.
+## Operations
+
+Sign in to the UI at [http://127.0.0.1:8200/ui/](http://127.0.0.1:8200/ui/) (Token method). Double-click `login-openbao-ui.cmd` (or run the `.ps1`); approve UAC, then paste from the clipboard into the Token field:
+
+```powershell
+.\login-openbao-ui.cmd
+.\login-openbao-ui.ps1 -UseAppToken          # sampleapp-apps token instead of root
+.\login-openbao-ui.ps1 -CreateDesktopShortcut
+```
+
+Manual copy (elevated PowerShell):
+
+```powershell
+(Get-Content C:\OpenBao\init\bao-init.json -Raw | ConvertFrom-Json).root_token
+```
+
+Create a limited token for applications (read-only on KV v2 `secret/sampleapp`, matching [DOTNET.md](DOTNET.md)). Run elevated:
+
+```powershell
+$env:BAO_ADDR = "http://127.0.0.1:8200"
+$env:BAO_TOKEN = (Get-Content C:\OpenBao\init\bao-init.json -Raw | ConvertFrom-Json).root_token
+$Bao = "C:\OpenBao\bao.exe"
+
+& $Bao secrets enable -path=secret -version=2 kv  # ignore error if already enabled
+
+@'
+path "secret/data/sampleapp" {
+  capabilities = ["read"]
+}
+path "secret/metadata/sampleapp" {
+  capabilities = ["read", "list"]
+}
+'@ | Set-Content -Path $env:TEMP\sampleapp-read.hcl -Encoding utf8
+
+& $Bao policy write sampleapp-read $env:TEMP\sampleapp-read.hcl
+$auth = & $Bao token create -policy=sampleapp-read -display-name=sampleapp-apps -ttl=8760h -renewable=true -format=json | ConvertFrom-Json
+$auth.auth.client_token
+```
+
+Set `BAO_TOKEN` (or `VAULT_TOKEN`) for apps to the printed token, or persist it for local dev:
+
+```powershell
+$auth.auth.client_token | Set-Content C:\OpenBao\init\sampleapp-token.txt -NoNewline
+icacls C:\OpenBao\init\sampleapp-token.txt /inheritance:r /grant:r "SYSTEM:F" "Administrators:F"
+```
+
+Smoke-test the API with [samples/openbao-connect](samples/openbao-connect/README.md).
 
 ## Permissions
 

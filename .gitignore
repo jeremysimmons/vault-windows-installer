@@ -1,0 +1,10 @@
+# .NET build output
+**/bin/
+**/obj/
+
+# OpenBao install secrets (live under C:\OpenBao; never commit copies)
+**/bao-init.json
+**/sampleapp-token.json
+**/sampleapp-token.txt
+**/unseal.key
+**/*-init.json
