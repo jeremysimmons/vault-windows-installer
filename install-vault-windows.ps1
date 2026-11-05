@@ -11,9 +11,9 @@
     Re-running preserves Raft data, existing configuration, and service startup
     mode. It never initializes/unseals Vault or creates TLS private keys.
 .EXAMPLE
-    .\Install-Vault-Windows.ps1 -VaultDnsName vault.example.com
+    .\install-vault-windows.ps1 -VaultDnsName vault.example.com
 .EXAMPLE
-    .\Install-Vault-Windows.ps1 -VaultDnsName vault.example.com -Start -AutoStart
+    .\install-vault-windows.ps1 -VaultDnsName vault.example.com -Start -AutoStart
 #>
 [CmdletBinding()]
 param(
@@ -51,9 +51,9 @@ $NssmUrl = 'https://nssm.cc/ci/nssm-2.24-101-g897c7ad.zip'
 $NssmArchiveSha256 = '99F5045FFFBFFB745D67FE3A065A953C4A3D9C253B868892D9B685B0EE7D07B8'
 
 function Invoke-Native {
-    param([string]$Exe, [string[]]$Args)
-    & $Exe @Args
-    if ($LASTEXITCODE -ne 0) { throw "Command failed ($LASTEXITCODE): $Exe $($Args -join ' ')" }
+    param([string]$Exe, [string[]]$ArgumentList)
+    & $Exe @ArgumentList
+    if ($LASTEXITCODE -ne 0) { throw "Command failed ($LASTEXITCODE): $Exe $($ArgumentList -join ' ')" }
 }
 
 function Assert-Hash {
@@ -71,8 +71,8 @@ function Download-File {
 }
 
 function Grant-Acl {
-    param([string]$Path, [string[]]$Args)
-    Invoke-Native -Exe 'icacls.exe' -Args (@($Path) + $Args)
+    param([string]$Path, [string[]]$ArgumentList)
+    Invoke-Native -Exe 'icacls.exe' -ArgumentList (@($Path) + $ArgumentList)
 }
 
 $TempDir = Join-Path ([IO.Path]::GetTempPath()) ("vault-install-" + [Guid]::NewGuid().ToString('N'))

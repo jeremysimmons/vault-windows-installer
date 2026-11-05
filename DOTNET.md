@@ -2,7 +2,7 @@
 
 Read KV v2 secrets from the Vault installed by these scripts into `IConfiguration`.
 
-The local installer listens on `http://127.0.0.1:8200` with TLS disabled. `Install-Vault-Windows.ps1` listens on `https://<VaultDnsName>:8200`. Neither script initializes Vault, unseals it, or enables a secrets engine. Do that once before an application connects.
+The local installer listens on `http://127.0.0.1:8200` with TLS disabled. `install-vault-windows.ps1` listens on `https://<VaultDnsName>:8200`. Neither script initializes Vault, unseals it, or enables a secrets engine. Do that once before an application connects.
 
 ```powershell
 dotnet add package VaultSharp.Extensions.Configuration
