@@ -2,34 +2,32 @@
 #Requires -RunAsAdministrator
 <#
 .SYNOPSIS
-    Remove the HashiCorp Vault service and files created by these installers.
+    Remove the OpenBao service and files created by install-openbao-windows.ps1.
 .DESCRIPTION
-    Stops and deletes the NSSM service named Vault when it points at
-    InstallRoot\vault.exe, removes the Vault-Local-Unseal scheduled task,
-    and deletes InstallRoot. That removes binaries, Raft data, configuration,
-    TLS material, and the local init key file.
+    Stops and deletes the NSSM service named OpenBao when it points at
+    InstallRoot\bao.exe, and deletes InstallRoot. That removes binaries, PebbleDB
+    data, configuration, the static unseal key, and the init file.
 
-    An unrelated service named Vault is left in place, and a directory that
+    An unrelated service named OpenBao is left in place, and a directory that
     does not contain this installer's files is not deleted. Re-running after
-    a successful uninstall succeeds.
+    a successful uninstall succeeds. Does not remove Vault or C:\Vault.
 .EXAMPLE
-    .\uninstall-vault-windows.ps1
+    .\uninstall-openbao-windows.ps1
 .EXAMPLE
-    .\uninstall-vault-windows.ps1 -InstallRoot D:\Vault
+    .\uninstall-openbao-windows.ps1 -InstallRoot D:\OpenBao
 #>
 [CmdletBinding()]
 param(
-    [string]$InstallRoot = 'C:\Vault'
+    [string]$InstallRoot = 'C:\OpenBao'
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-$ServiceName = 'Vault'
-$UnsealTaskName = 'Vault-Local-Unseal'
-$VaultExe = Join-Path $InstallRoot 'vault.exe'
+$ServiceName = 'OpenBao'
+$BaoExe = Join-Path $InstallRoot 'bao.exe'
 $NssmExe = Join-Path $InstallRoot 'nssm.exe'
-$UnsealScript = Join-Path $InstallRoot 'unseal-vault.ps1'
+$ConfigFile = Join-Path $InstallRoot 'config.hcl'
 
 function Invoke-Native {
     param([string]$Exe, [string[]]$ArgumentList)
@@ -37,7 +35,7 @@ function Invoke-Native {
     if ($LASTEXITCODE -ne 0) { throw "Command failed ($LASTEXITCODE): $Exe $($ArgumentList -join ' ')" }
 }
 
-function Remove-VaultService {
+function Remove-OpenBaoService {
     $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
     if ($null -eq $service) {
         Write-Host "Service $ServiceName is not installed."
@@ -54,8 +52,8 @@ function Remove-VaultService {
     }
 
     $app = ((& $NssmExe get $ServiceName Application) | Out-String).Trim().Trim('"')
-    if ($LASTEXITCODE -ne 0 -or $app -ine $VaultExe) {
-        throw "Service '$ServiceName' points to '$app', not '$VaultExe'. Refusing to remove it."
+    if ($LASTEXITCODE -ne 0 -or $app -ine $BaoExe) {
+        throw "Service '$ServiceName' points to '$app', not '$BaoExe'. Refusing to remove it."
     }
 
     if ($service.Status -ne 'Stopped') {
@@ -69,34 +67,23 @@ function Remove-VaultService {
     Write-Host "Removed $ServiceName service."
 }
 
-function Remove-VaultUnsealTask {
-    $task = Get-ScheduledTask -TaskName $UnsealTaskName -ErrorAction SilentlyContinue
-    if ($null -eq $task) {
-        Write-Host "Scheduled task $UnsealTaskName is not installed."
-        return
-    }
-    Stop-ScheduledTask -TaskName $UnsealTaskName -ErrorAction SilentlyContinue
-    Unregister-ScheduledTask -TaskName $UnsealTaskName -Confirm:$false
-    Write-Host "Removed scheduled task $UnsealTaskName."
-}
-
-function Remove-VaultInstallRoot {
+function Remove-OpenBaoInstallRoot {
     if (-not (Test-Path -LiteralPath $InstallRoot -PathType Container)) {
         Write-Host "$InstallRoot does not exist."
         return
     }
 
     $owned = $false
-    foreach ($marker in @($VaultExe, $NssmExe, $UnsealScript)) {
+    foreach ($marker in @($BaoExe, $NssmExe, $ConfigFile)) {
         if (Test-Path -LiteralPath $marker -PathType Leaf) { $owned = $true; break }
     }
     if (-not $owned) {
-        throw "$InstallRoot does not contain this installer's vault.exe, nssm.exe, or unseal-vault.ps1. Refusing to delete it."
+        throw "$InstallRoot does not contain this installer's bao.exe, nssm.exe, or config.hcl. Refusing to delete it."
     }
 
-    Get-CimInstance Win32_Process -Filter "Name='vault.exe'" | ForEach-Object {
+    Get-CimInstance Win32_Process -Filter "Name='bao.exe'" | ForEach-Object {
         $processPath = [string]$_.ExecutablePath
-        if ($processPath -ieq $VaultExe) {
+        if ($processPath -ieq $BaoExe) {
             Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue
         }
     }
@@ -117,10 +104,9 @@ function Remove-VaultInstallRoot {
     Write-Host "Removed $InstallRoot."
 }
 
-Remove-VaultService
-Remove-VaultUnsealTask
-Remove-VaultInstallRoot
+Remove-OpenBaoService
+Remove-OpenBaoInstallRoot
 
 Write-Host ''
-Write-Host 'Vault uninstall complete.' -ForegroundColor Green
-Write-Host 'No Windows Firewall rules were removed; the installers do not add any.'
+Write-Host 'OpenBao uninstall complete.' -ForegroundColor Green
+Write-Host 'No Windows Firewall rules were removed; the installer does not add any.'

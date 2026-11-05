@@ -1,43 +1,44 @@
-# Vault Windows Installer
+# OpenBao Windows Installer
 
-Idempotent PowerShell installers for a single-node [HashiCorp Vault](https://www.vaultproject.io/) Community server on 64-bit Windows.
+Idempotent PowerShell installer for a single-node [OpenBao](https://openbao.org/) server on 64-bit Windows.
 
-Each script downloads and SHA256-verifies Vault and [NSSM](https://nssm.cc/), creates the install layout, writes a starter Raft config when none exists, and registers a Windows service as the virtual account `NT SERVICE\Vault`. Re-runs keep existing Raft data, configuration, and service startup mode. Neither script creates TLS private keys, upgrades an existing binary, or adds firewall rules. The TLS script does not initialize or unseal Vault. The local script starts the service automatically, creates a new single-node Raft cluster when Vault is uninitialized, unseals it, and registers a startup task that unseals again after reboot.
+The script downloads and SHA256-verifies OpenBao and [NSSM](https://nssm.cc/), creates the install layout, writes a starter PebbleDB configuration with static auto-unseal when none exists, and registers an automatically started Windows service as the virtual account `NT SERVICE\OpenBao`. Re-runs preserve the binary when the version matches, the unseal key, configuration, Pebble data, init file, and service settings. The script does not upgrade an existing binary silently or add firewall rules.
+
+On first run, when OpenBao is not yet initialized, the installer runs `bao operator init` once and saves the root token and recovery key to `init\bao-init.json` (Administrators and SYSTEM only). Static auto-unseal reads `unseal.key` at service start, so there is no Shamir unseal step and no reboot startup task.
 
 ## Scripts
 
-- `install-vault-windows.ps1` — TLS listener on `0.0.0.0:8200`. Requires `-VaultDnsName`. Place PEM files at `C:\Vault\certs\vault.crt` and `vault.key` before starting.
-- `install-vault-windows-local.ps1` — loopback HTTP only (`127.0.0.1:8200`, TLS disabled). Initializes a new Raft cluster and unseals it. Do not expose this listener off the machine without TLS.
-- `uninstall-vault-windows.ps1` — stops and deletes the `Vault` service when it is this NSSM install, removes the `Vault-Local-Unseal` task, and deletes the install root (Raft data, config, certs, and init keys).
+- `install-openbao-windows.ps1` — loopback HTTP only (`127.0.0.1:8200`, TLS disabled). PebbleDB storage and a local 32-byte static unseal key.
+- `uninstall-openbao-windows.ps1` — stops and deletes the `OpenBao` service when it is this NSSM install and deletes the install root (Pebble data, config, unseal key, and init file).
 
 ## Requirements
 
 - Windows PowerShell 5.1 or later
 - 64-bit Windows
 - Administrator
-- Outbound HTTPS to `releases.hashicorp.com` and `nssm.cc`
+- Outbound HTTPS to `github.com` (OpenBao releases) and `nssm.cc`
 
-Default install root is `C:\Vault`. Default Vault version is `2.2.1`.
+Default install root is `C:\OpenBao`. Default OpenBao version is `2.7.2`.
 
 ## Usage
 
 ```powershell
-# TLS, remote DNS name
-.\install-vault-windows.ps1 -VaultDnsName vault.example.com
-.\install-vault-windows.ps1 -VaultDnsName vault.example.com -Start -AutoStart
-
-# Localhost only
-.\install-vault-windows-local.ps1
-.\install-vault-windows-local.ps1 -Start -AutoStart
-
-# Remove the service, unseal task, and C:\Vault
-.\uninstall-vault-windows.ps1
+.\install-openbao-windows.ps1
+.\uninstall-openbao-windows.ps1
 ```
 
-The TLS installer leaves initialization to the operator. The local installer saves the unseal key and root token under `C:\Vault\init\vault-init.json` (Administrators and SYSTEM only). Sign in to the UI with that root token.
+Sign in to the UI at [http://127.0.0.1:8200/ui/](http://127.0.0.1:8200/ui/) with the `root_token` from `C:\OpenBao\init\bao-init.json`.
+
+## Permissions
+
+The install root grants `BUILTIN\Users` read and execute so a non-elevated administrator can browse `C:\OpenBao`, read `config.hcl`, and view logs without UAC (the same pattern as `C:\Program Files`). The config names the unseal key path but does not contain the key.
+
+`unseal.key`, `init\`, and `data\` have no Users ACE. Opening those paths still requires elevation.
+
+The static unseal key on disk is a deliberate tradeoff for a single-machine dev install: anyone with Administrator access (or backup access to the install root) can read it and unseal the server.
 
 ## License
 
 MIT. See [LICENSE](LICENSE).
 
-Vault and NSSM are third-party software with their own licenses. This repository covers the installer scripts only.
+OpenBao and NSSM are third-party software with their own licenses. This repository covers the installer scripts only.

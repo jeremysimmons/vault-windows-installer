@@ -1,8 +1,8 @@
 # .NET configuration provider
 
-Read KV v2 secrets from the Vault installed by these scripts into `IConfiguration`.
+Read KV v2 secrets from the OpenBao instance installed by these scripts into `IConfiguration`.
 
-The local installer listens on `http://127.0.0.1:8200` with TLS disabled. `install-vault-windows.ps1` listens on `https://<VaultDnsName>:8200`. Neither script initializes Vault, unseals it, or enables a secrets engine. Do that once before an application connects.
+The installer listens on `http://127.0.0.1:8200` with TLS disabled. The HTTP API remains Vault-compatible, so [VaultSharp.Extensions.Configuration](https://www.nuget.org/packages/VaultSharp.Extensions.Configuration) works unchanged. Enable a KV v2 secrets engine and write secrets before an application connects.
 
 ```powershell
 dotnet add package VaultSharp.Extensions.Configuration
@@ -16,7 +16,7 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddVaultConfiguration(
     () => new VaultOptions(
         "http://127.0.0.1:8200",
-        Environment.GetEnvironmentVariable("VAULT_TOKEN")!,
+        Environment.GetEnvironmentVariable("BAO_TOKEN")!,
         reloadOnChange: true,
         reloadCheckIntervalSeconds: 60),
     basePath: "sampleapp",
@@ -41,9 +41,9 @@ public sealed class FeatureFlagsOptions
 }
 ```
 
-`WebApplication.CreateBuilder` already loads `appsettings.json`, user secrets, and environment variables. Vault is added after those sources, so Vault values win. Call `AddEnvironmentVariables()` again after `AddVaultConfiguration` when environment variables must override Vault.
+`WebApplication.CreateBuilder` already loads `appsettings.json`, user secrets, and environment variables. OpenBao is added after those sources, so OpenBao values win. Call `AddEnvironmentVariables()` again after `AddVaultConfiguration` when environment variables must override OpenBao.
 
-Set `VAULT_TOKEN` before the process starts. For the TLS installer, pass `https://<VaultDnsName>:8200` and `insecureConnection: true` only when the certificate is not trusted.
+Set `BAO_TOKEN` (or `VAULT_TOKEN`) before the process starts. Use the `root_token` from `C:\OpenBao\init\bao-init.json` for local development only; create a limited policy for applications.
 
 KV v2 document at `secret/sampleapp`. Nested JSON becomes configuration sections.
 
@@ -55,11 +55,11 @@ KV v2 document at `secret/sampleapp`. Nested JSON becomes configuration sections
 ```
 
 ```powershell
-$env:VAULT_ADDR = "http://127.0.0.1:8200"
-$env:VAULT_TOKEN = "<token>"
+$env:BAO_ADDR = "http://127.0.0.1:8200"
+$env:BAO_TOKEN = "<token>"
 
-vault secrets enable -path=secret -version=2 kv
-vault kv put secret/sampleapp @appsettings.vault.json
+C:\OpenBao\bao.exe secrets enable -path=secret -version=2 kv
+C:\OpenBao\bao.exe kv put secret/sampleapp @appsettings.vault.json
 ```
 
 The token needs `read` on `secret/data/sampleapp` and `read` plus `list` on `secret/metadata/sampleapp`. `VaultChangeWatcher` polls metadata and reloads configuration. `IOptionsMonitor<AppOptions>` sees those reloads. Values copied into a singleton at startup do not.
